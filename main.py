@@ -240,7 +240,7 @@ def wait_next_run(idx, runs_count):
 
 def write_result(filename, account):
     with open(f'{results_path}/{filename}', 'a') as file:
-        file.write(f'{"|".join(list(account))}\n')
+        file.write(f'{"|".join([str(a) for a in list(account)])}\n')
 
 
 def log_run(address, account, status, exc=None, msg=''):
