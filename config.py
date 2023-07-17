@@ -1,4 +1,4 @@
-MANIFOLD_LINK = 'https://app.manifold.xyz/c/optimism-bedrock'
+MANIFOLD_LINK = 'https://app.manifold.xyz/c/soundxyz'
 
 ###############################################################################################################
 

@@ -126,7 +126,9 @@ def get_mint_info(sess, identifier):
         raise RunnerException(f'status_code = {resp.status_code}, response = {resp.text}')
     try:
         data = resp.json()['publicData']
-        return data['claimIndex'], data['creatorContractAddress'], data['extensionAddress'], data['network']
+        return data['claimIndex'], \
+            data['creatorContractAddress'], data['extensionAddress'], \
+            data['network'], data['claimType']
     except Exception:
         raise RunnerException(f'response = {resp.text}')
 
@@ -174,23 +176,23 @@ class Runner:
         return build_and_send_tx(w3, self.address, self.private_key, func, value, self.tx_verification, action)
 
     @runner_func('Mint')
-    def mint(self, mint_contract_address, identifier, creator_contract_address, chain):
+    def mint(self, mint_contract_address, identifier, creator_contract_address, chain, is_erc1155):
         w3 = self.w3(chain)
 
         mint_contract_address = Web3.to_checksum_address(mint_contract_address)
         creator_contract_address = Web3.to_checksum_address(creator_contract_address)
 
-        contract = w3.eth.contract(mint_contract_address, abi=MANIFOLD_MINT_ABI)
+        nft_contract = w3.eth.contract(creator_contract_address, abi=NFT_ABI)
+        if nft_contract.functions.balanceOf(self.address).call() > 0:
+            return Status.ALREADY
+
+        contract = w3.eth.contract(mint_contract_address,
+                                   abi=MANIFOLD_MINT_ERC1155_ABI if is_erc1155 else MANIFOLD_MINT_ERC721_ABI)
 
         claim_data = contract.functions.getClaim(creator_contract_address, identifier).call()
-        wallet_max = claim_data[2]
         cost = claim_data[-3]
         merkle_proof = []
         mint_index = 0
-
-        wallet_mints = contract.functions.getTotalMints(self.address, creator_contract_address, identifier).call()
-        if wallet_mints >= wallet_max:
-            return Status.ALREADY
 
         manifold_fee = contract.functions.MINT_FEE().call()
 
@@ -208,9 +210,11 @@ class Runner:
     def run(self):
         logger.print(self.address)
 
-        identifier, creator_contract_address, mint_contract_address, network = self.mint_info
+        identifier, creator_contract_address, mint_contract_address, network, claim_type = self.mint_info
 
-        return self.mint(mint_contract_address, identifier, creator_contract_address, CHAIN_NAMES[network])
+        is_erc1155 = claim_type == 'ERC1155'
+
+        return self.mint(mint_contract_address, identifier, creator_contract_address, CHAIN_NAMES[network], is_erc1155)
 
 
 def wait_next_run(idx, runs_count):
@@ -296,7 +300,8 @@ def main():
     cprint(f'Network = {CHAIN_NAMES[mint_info[3]]}\n'
            f'Mint contract = {mint_info[2]}\n'
            f'NFT contract = {mint_info[1]}\n'
-           f'Identifier = {mint_info[0]}\n')
+           f'Identifier = {mint_info[0]}\n'
+           f'Type = {mint_info[4]}\n')
     wait_next_tx()
 
     queue = list(zip(wallets, proxies))
